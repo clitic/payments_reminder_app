@@ -244,13 +244,15 @@ class PaymentProvider extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      // Cancel reminders first
-      final reminders =
-          await _databaseService.getRemindersForPayment(paymentId);
-      await _notificationService.cancelPaymentReminders(reminders);
-
-      // Delete reminders
-      await _databaseService.deleteRemindersForPayment(paymentId);
+      // Cancel reminders first (non-critical - don't fail delete if this fails)
+      try {
+        final reminders =
+            await _databaseService.getRemindersForPayment(paymentId);
+        await _notificationService.cancelPaymentReminders(reminders);
+        await _databaseService.deleteRemindersForPayment(paymentId);
+      } catch (e) {
+        debugPrint('Error cancelling reminders during delete: $e');
+      }
 
       // Soft delete payment (for sync)
       await _databaseService.softDeletePayment(paymentId);
@@ -262,7 +264,7 @@ class PaymentProvider extends ChangeNotifier {
 
       return true;
     } catch (e) {
-      _errorMessage = 'Failed to delete payment';
+      _errorMessage = 'Failed to delete payment: ${e.toString()}';
       notifyListeners();
       debugPrint('Error deleting payment: $e');
       return false;

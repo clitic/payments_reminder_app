@@ -5,6 +5,7 @@ import '../../core/constants/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/sync_provider.dart';
+import '../../services/notification_service.dart';
 import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
 
@@ -39,6 +40,7 @@ class SettingsScreen extends StatelessWidget {
           _buildSectionHeader(theme, 'Notifications'),
           _buildNotificationsTile(context, theme, settingsProvider),
           _buildDefaultRemindersTile(context, theme, settingsProvider),
+          _buildTestNotificationTile(context, theme),
           const Divider(),
 
           // Security section
@@ -177,6 +179,46 @@ class SettingsScreen extends StatelessWidget {
                 .join(', '),
       ),
       onTap: () => _showReminderSettingsDialog(context, settingsProvider),
+    );
+  }
+
+  Widget _buildTestNotificationTile(BuildContext context, ThemeData theme) {
+    return ListTile(
+      leading: Icon(
+        Icons.notifications_active,
+        color: theme.colorScheme.primary,
+      ),
+      title: const Text('Test Notification'),
+      subtitle: const Text('Send a test notification now'),
+      trailing: FilledButton.tonal(
+        onPressed: () async {
+          final notificationService = NotificationService.instance;
+          
+          if (!notificationService.isInitialized) {
+            await notificationService.initialize();
+            await notificationService.requestPermissions();
+          }
+          
+          await notificationService.showInstantNotification(
+            id: 99999,
+            title: '🔔 Test Notification',
+            body: 'If you see this, notifications are working!',
+          );
+          
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Test notification sent!'),
+                backgroundColor: AppTheme.paidColor,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        },
+        child: const Text('Test'),
+      ),
     );
   }
 

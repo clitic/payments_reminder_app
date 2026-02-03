@@ -110,14 +110,60 @@ class NotificationService {
     }
 
     if (Platform.isAndroid) {
-      final result = await _notificationsPlugin
+      final androidPlugin = _notificationsPlugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
-      return result ?? false;
+              AndroidFlutterLocalNotificationsPlugin>();
+      
+      if (androidPlugin == null) return false;
+      
+      // Request notification permission (Android 13+)
+      final notificationResult = await androidPlugin.requestNotificationsPermission();
+      debugPrint('Notification permission result: $notificationResult');
+      
+      // Request exact alarm permission (Android 12+)
+      final exactAlarmResult = await androidPlugin.requestExactAlarmsPermission();
+      debugPrint('Exact alarm permission result: $exactAlarmResult');
+      
+      return notificationResult ?? false;
     }
 
     return true;
+  }
+
+  /// Show an instant notification (for testing)
+  Future<void> showInstantNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    if (!_isInitialized) {
+      debugPrint('Notification service not initialized');
+      return;
+    }
+
+    final androidDetails = AndroidNotificationDetails(
+      AppConfig.notificationChannelId,
+      AppConfig.notificationChannelName,
+      channelDescription: AppConfig.notificationChannelDescription,
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: darwinDetails,
+    );
+
+    await _notificationsPlugin.show(id, title, body, details);
+    debugPrint('Showed instant notification: $title');
   }
 
   // ===========================================================================

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import '../core/constants/app_constants.dart';
@@ -38,8 +39,19 @@ class NotificationService {
     if (_isInitialized) return true;
 
     try {
-      // Initialize timezone
+      // Initialize timezone database
       tz_data.initializeTimeZones();
+      
+      // CRITICAL: Set the local timezone from device
+      try {
+        final String timeZoneName = await FlutterTimezone.getLocalTimezone();
+        tz.setLocalLocation(tz.getLocation(timeZoneName));
+        debugPrint('Timezone set to: $timeZoneName');
+      } catch (e) {
+        // Fallback to a default timezone if detection fails
+        debugPrint('Failed to get device timezone: $e, using UTC');
+        tz.setLocalLocation(tz.getLocation('UTC'));
+      }
 
       // Android initialization settings
       const androidSettings = AndroidInitializationSettings(
@@ -192,19 +204,33 @@ class NotificationService {
   /// Schedule a reminder notification
   Future<void> scheduleReminder(Reminder reminder, Payment payment) async {
     if (!_isInitialized) {
-      debugPrint('Notification service not initialized');
+      debugPrint('❌ Notification service not initialized');
       return;
     }
 
     // Don't schedule if in the past
     if (reminder.scheduledTime.isBefore(DateTime.now())) {
-      debugPrint('Reminder time is in the past, skipping');
+      debugPrint('⏭️ Reminder time is in the past, skipping: ${reminder.scheduledTime}');
       return;
     }
 
-    // Build notification content (avoid exposing sensitive data)
+    // Build notification content
     final title = _getReminderTitle(reminder.type);
     final body = _getReminderBody(payment, reminder.type);
+
+    // Convert to timezone-aware datetime
+    final scheduledTzTime = tz.TZDateTime.from(reminder.scheduledTime, tz.local);
+
+    // Debug logging
+    debugPrint('═══════════════════════════════════════════');
+    debugPrint('📅 SCHEDULING NOTIFICATION');
+    debugPrint('   Payment: ${payment.title}');
+    debugPrint('   Reminder Type: ${reminder.type.displayName}');
+    debugPrint('   Local DateTime: ${reminder.scheduledTime}');
+    debugPrint('   TZ DateTime: $scheduledTzTime');
+    debugPrint('   Timezone: ${tz.local.name}');
+    debugPrint('   Notification ID: ${reminder.notificationId}');
+    debugPrint('═══════════════════════════════════════════');
 
     // Notification details
     final androidDetails = AndroidNotificationDetails(
@@ -244,7 +270,7 @@ class NotificationService {
       reminder.notificationId,
       title,
       body,
-      tz.TZDateTime.from(reminder.scheduledTime, tz.local),
+      scheduledTzTime,
       details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
@@ -252,9 +278,7 @@ class NotificationService {
       payload: '${payment.id}|${reminder.id}',
     );
 
-    debugPrint(
-      'Scheduled reminder: ${reminder.type.displayName} for ${payment.title} at ${reminder.scheduledTime}',
-    );
+    debugPrint('✅ Notification scheduled successfully!');
   }
 
   /// Schedule all reminders for a payment
